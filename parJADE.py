@@ -6,10 +6,13 @@ import torch.distributed as dist
 
 def gentest(m=100,k=100,noise=0):
     '''k matrices of m by m size, normal noise multiplied by noise=0'''
+    print('create rotation matirx')
     U,S,V = th.svd(th.randn(m,m))
     rand = th.randn(k,m,m)
+    print('build random diagonal')
     diag = th.eye(m,m)
     diag = diag[None,:,:] * rand
+    print('rotate random diagonal by joint basis')
     M = U[None,:,:] @ diag @ U.transpose(1,0)[None,:,:] + rand*noise
     print('testcase of shape ',M.shape,' has size ',memsize(M))
     return M
@@ -91,7 +94,7 @@ def rotmat(A,tournament,device):
     return J,ssum
 
 
-def parjade(A, rank, solutions, thres=1.0E-12, maxiter=500,verbose=2,seed=1):
+def parjade(A, rank, solutions, thres=1.0E-12, maxiter=1000,verbose=2,seed=1):
 
     th.set_default_tensor_type('torch.cuda.FloatTensor')
     device = th.device('cuda:{}'.format(rank)) # select gpu
@@ -141,13 +144,11 @@ def parjade(A, rank, solutions, thres=1.0E-12, maxiter=500,verbose=2,seed=1):
     A = A[:,:m-pad_flag,:m-pad_flag]
     V = V[:m-pad_flag,:m-pad_flag]
 
-    print(V@V.transpose(1,0))
-    solutions['As'] = solutions['As'].append(A.cpu())
-    solutions['Vs'] = solutions['Vs'].append(V.cpu())
-    solutions['n_iter'] = solutions['n_iter'].append(n_iter) #seems to live on cpu already?
+    solutions['As'].append(A.cpu())
+    solutions['Vs'].append(V.cpu())
+    solutions['n_iter'].append(n_iter) #seems to live on cpu already?
 
-
-# set up environment
+# process management
 def init_processes(M,rank,size,solutions,backend='gloo'):
     """ Initialize the distributed environment. """
     os.environ['MASTER_ADDR'] = '127.0.0.1'
@@ -155,23 +156,12 @@ def init_processes(M,rank,size,solutions,backend='gloo'):
     dist.init_process_group(backend, rank=rank, world_size=size)
     parjade(M, rank, solutions)
 
-# run for world size 2
-if __name__ == "__main__":
-    world_size = 2 # number of gpus
-    mat_shape = 100 # m x m matrix
-    num_mats = 1000
-    noise = 0 # variance, gaussian
-
-    M = gentest(mat_shape,num_mats,noise)
-    M = partition(M,world_size)
-
-    
+def distributed_jade(M,world_size):
     manager = Manager()
     solutions = manager.dict()
     solutions['As'] = manager.list()
     solutions['Vs'] = manager.list()
     solutions['n_iter'] = manager.list()
-    import ipdb; ipdb.set_trace()
 
     processes = []
     for rank in range(world_size):
@@ -181,19 +171,21 @@ if __name__ == "__main__":
 
     for p in processes:
         p.join()
-    import ipdb; ipdb.set_trace()
 
-    #but now they get excecuted one after the other
+    A = th.cat([i for i in solutions['As']],dim=0)
+    V = th.stack([i for i in solutions['Vs']])
+    n_iter = [i for i in solutions['n_iter']]
     
-    print(solutions)
-    # need to safe return and concat
-    # also try to use pool
+    return A, V, n_iter
 
-# pool = torch.multiprocessing.Pool(3)
-# result = pool.map(initial_process,(all args tuple))
+# run for world size 2
+if __name__ == "__main__":
+    world_size = 2 # number of gpus
+    mat_shape = 100 # m x m matrix
+    num_mats = 2000
+    noise = 0 # variance, gaussian
 
-#    p = Pool(world_size)
-#    result = p.map(init_processes, exp_list)
-#    p.close()
-#    p.join()
+    M = gentest(mat_shape,num_mats,noise)
+    M = partition(M,world_size)
 
+    Mdiag,V,n_iter = distributed_jade(M,world_size)
