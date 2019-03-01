@@ -6,15 +6,14 @@ import torch.distributed as dist
 
 def gentest(m=100,k=100,noise=0):
     '''k matrices of m by m size, normal noise multiplied by noise=0'''
-    print('create rotation matirx')
+    print('prepare joint basis (symmetric orthogonal)')
     U,S,V = th.svd(th.randn(m,m))
     rand = th.randn(k,m,m)
     print('build random diagonal')
-    diag = th.eye(m,m)
-    diag = diag[None,:,:] * rand
+    diag = th.unsqueeze(th.eye(m,m),0) * rand
     print('rotate random diagonal by joint basis')
-    M = U[None,:,:] @ diag @ U.transpose(1,0)[None,:,:] + rand*noise
-    print('testcase of shape ',M.shape,' has size ',memsize(M))
+    M = th.unsqueeze(U,0) @ diag @ th.unsqueeze(U.transpose(1,0),0) + rand*noise
+    print(f'testcase of shape {M.shape} has size {memsize(M)}')
     return M
 
 def memsize(DataTensor):
@@ -25,7 +24,7 @@ def memsize(DataTensor):
     i = int(math.floor(math.log(size_bytes, 1024)))
     p = math.pow(1024, i)
     s = round(size_bytes / p, 2)
-    return "%s %s" % (s, size_name[i])
+    return f'{s} {size_name[i]}'
 
 # jade utils
 def partition(M,rank):
@@ -33,10 +32,10 @@ def partition(M,rank):
     matN = M.shape[0]
     idx = th.arange(matN).reshape(rank,-1)
     Msplit = M[idx]
-    print('dataset shape is: ',Msplit.shape)
+    print(f'dataset shape is: {Msplit.shape}')
     return Msplit
 
-def scheduler(tournament):
+def tournament_scheduler(tournament):
     '''return next draw of tournament table'''
     old = tournament
     new = th.zeros(old.shape,dtype=th.int64)
@@ -51,19 +50,17 @@ def scheduler(tournament):
     return new
 
 def pad(A):
-    if A.shape[1] %2 is not 0:
-        pad_flag = 1
-        j,k = A.shape[0],A.shape[1]
-        zers1 = th.zeros((j,k)).reshape(j,k,1)
+    pad_flag = A.shape[1] % 2
+    if pad_flag:
+        j,k,_ = A.shape
+        zers1 = th.zeros((j,k,1))
         A = th.cat((A,zers1),2)
-        zers2 = th.zeros((j,k+1)).reshape(j,1,k+1)
+        zers2 = th.zeros((j,1,k+1))
         A = th.cat((A,zers2),1)
-    else:
-        pad_flag = 0
     return A,pad_flag
 
 def offdiag(A,device):
-    mask = ((th.eye(A.shape[1],device=device))==0).type(th.float)
+    mask = 1 - th.eye(A.shape[1],device=device)
     offdiag = A * mask
     norm = th.sqrt(th.mean(offdiag**2))
     return norm
@@ -94,15 +91,20 @@ def rotmat(A,tournament,device):
     return J,ssum
 
 
-def parjade(A, rank, solutions, thres=1.0E-12, maxiter=1000,verbose=2,seed=1):
+def parjade(A, rank, solutions,**kwargs):
+
+    maxiter = kwargs.get('maxiter', 1000)
+    thres = kwargs.get('thres',1.0E-12)
+    verbose = kwargs.get('verbose',2)
+    seed = kwargs.get('seed',1)
 
     th.set_default_tensor_type('torch.cuda.FloatTensor')
-    device = th.device('cuda:{}'.format(rank)) # select gpu
+    device = th.device(f'cuda:{rank}') # select gpu
     A = A[rank].to(device) # take batch to device
     A,pad_flag = pad(A) # pad if necessary
-    print('par shape of A loaded on gpu',A.shape)
+    verbose > 1 and  print(f'par shape of A loaded on gpu {A.shape}')
 
-    # init joint basis to identity
+    # initialize joint basis
     m = A.shape[1] # shape of matrices, m by m
     V = th.eye(m,device=device)
 
@@ -115,7 +117,7 @@ def parjade(A, rank, solutions, thres=1.0E-12, maxiter=1000,verbose=2,seed=1):
     active = th.tensor(1,dtype=th.uint8)
     n_iter = 0
 
-    while active == 1 and n_iter < maxiter:
+    while active and n_iter < maxiter:
         # matrix to set offdiag element to 0
         J,ssum = rotmat(A,tournament,device)
 
@@ -125,20 +127,20 @@ def parjade(A, rank, solutions, thres=1.0E-12, maxiter=1000,verbose=2,seed=1):
         V = V @ J
 
         # schedule successive tournament table
-        tournament = scheduler(tournament)
+        tournament = tournament_scheduler(tournament)
 
         # evaluate stopping criteria
         n_iter += 1
-        #active = ((th.sum(ssum))/m) > threshold
+        active = ((th.sum(ssum))/m) > threshold
 
         # verbose monitoring:
-        if verbose > 1 and n_iter % 10 == 0:
-            print('iteration:',n_iter,' offdiag:', offdiag(A,device))
+        if n_iter % 10 == 0:
+            verbose > 1 and print(f'device: {rank} | iteration: {n_iter} | offdiag: {offdiag(A,device)}')
 
-    if verbose > 0:
-        print(n_iter,'of',maxiter,'iterations')
-        print('reached threshold:',not(bool(active)))
-        print('Frob of A:', offdiag(A,device))
+    verbose > 0 and print(f'process {rank}',
+                            f'{n_iter} of maximum {maxiter} iterations',
+                            f'reached threshold: {not(bool(active))}',
+                            f'Norm of offdiag(A): {offdiag(A,device)}',sep='\n\t')
 
     # undo zero padding, if flag is set
     A = A[:,:m-pad_flag,:m-pad_flag]
@@ -149,14 +151,14 @@ def parjade(A, rank, solutions, thres=1.0E-12, maxiter=1000,verbose=2,seed=1):
     solutions['n_iter'].append(n_iter) #seems to live on cpu already?
 
 # process management
-def init_processes(M,rank,size,solutions,backend='gloo'):
+def init_processes(M,rank,size,solutions,backend='gloo',*args,**kwargs):
     """ Initialize the distributed environment. """
     os.environ['MASTER_ADDR'] = '127.0.0.1'
     os.environ['MASTER_PORT'] = '29500'
     dist.init_process_group(backend, rank=rank, world_size=size)
-    parjade(M, rank, solutions)
+    parjade(M, rank, solutions,*args,**kwargs)
 
-def distributed_jade(M,world_size):
+def distributed_jade(M,world_size,*args,**kwargs):
     manager = Manager()
     solutions = manager.dict()
     solutions['As'] = manager.list()
@@ -165,7 +167,8 @@ def distributed_jade(M,world_size):
 
     processes = []
     for rank in range(world_size):
-        p = Process(target=init_processes, args=(M,rank,world_size,solutions))
+        processargs = [M,rank,world_size,solutions]+list(args)
+        p = Process(target=init_processes, args=processargs, kwargs=kwargs)
         p.start()
         processes.append(p)
 
@@ -181,11 +184,11 @@ def distributed_jade(M,world_size):
 # working example
 if __name__ == "__main__":
     world_size = 2 # number of gpus
-    mat_shape = 100 # m x m matrix
-    num_mats = 2000
+    mat_shape = 1000 # m x m matrix
+    num_mats = 30
     noise = 0 # variance, gaussian
 
     M = gentest(mat_shape,num_mats,noise)
     M = partition(M,world_size)
 
-    Mdiag,V,n_iter = distributed_jade(M,world_size)
+    Mdiag,V,n_iter = distributed_jade(M,world_size,maxiter=50000)
