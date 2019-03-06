@@ -6,5 +6,4 @@
 #$ -t 1
 
 source testenv/bin/activate
-python distributed_pool.py
-echo 'hi'
+python parJADE_distributed.py

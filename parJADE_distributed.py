@@ -16,8 +16,8 @@ def gentest(m=100,k=100,noise=0):
     print(f'testcase of shape {M.shape} has size {memsize(M)}')
     return M
 
-def memsize(DataTensor):
-    size_bytes = DataTensor.element_size() * DataTensor.nelement()
+def memsize(M):
+    size_bytes = M.element_size() * M.nelement()
     if size_bytes == 0:
         return "0B"
     size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
