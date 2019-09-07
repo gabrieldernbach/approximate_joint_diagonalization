@@ -5,6 +5,9 @@ import numpy as np
 from numba import njit
 
 def jade(A, threshold=np.sqrt(np.spacing(1))):
+    '''
+    einsum based implementation of jade algorithm
+    '''
     A = np.copy(A)
     m = A.shape[1]
     k = A.shape[0]
@@ -35,8 +38,11 @@ def jade(A, threshold=np.sqrt(np.spacing(1))):
     return A, V
 
 
-# numba ready python implementation of cardosos matlab
 def jade_cardoso(A, threshold=1e-12):
+    '''
+    numba ready python implementation of cardosos matlab
+    in tensor notation but without acceleration
+    '''
     A = np.copy(A)
     m = A.shape[1]
     k = A.shape[0]
@@ -75,8 +81,10 @@ def jade_cardoso(A, threshold=1e-12):
     return A, V
 
 
+# precompiled version
 jade_precompiled_jit = njit("Tuple((float64[:,:,:],float64[:,:]))(float64[:,:,:],float64)")(jade_cardoso)
 
+# just in time compiled version
 @njit
 def jadejit(A, threshold=np.sqrt(np.spacing(1))):
     A = np.copy(A)
@@ -116,6 +124,8 @@ def jadejit(A, threshold=np.sqrt(np.spacing(1))):
                     V[:, q] = c * V[:, q] - s * temp
     return A, V
 
+
+# parallelized implementation
 from numba import njit,prange
 
 @njit
