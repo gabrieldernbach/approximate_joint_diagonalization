@@ -1,13 +1,14 @@
 # Parallel Approximate Joint Diagonalization
 
 GPU ready python implementations that scale to multiple GPUs.
-Large datasets become feasible by distribution to multiple nodes in a GPU cluster.
+By distributed calculation huge datasets can be computed in a scalable cloud environment.
 
 ## Getting Started
 
 ### Prerequisites
 
 Installation of numpy, numba and pytorch.
+Numpy and Numba versions are provided as base CPU implementation.
 
 ### Running the tests
 
@@ -23,7 +24,10 @@ Available methods are JADE [1] and Phams [2].
 [2] D. T. Pham, “Joint Approximate Diagonalization of Positive Definite Hermitian Matrices,” SIAM Journal on Matrix Analysis and Applications, vol. 22, no. 4, pp. 1136–1152, Jan. 2001.
 
 ### CPU version
-CPU implementations are based on numpy. Necessary modifications for just-in-time compilation via numba werde made.
+CPU implementations are based on numpy.
+Parallelization and just in time compilation are realized with numba.
+The code was modified to work with the library accordingly
+
 
 ### GPU versions
 GPU versions with parallelization are written in pytorch.
