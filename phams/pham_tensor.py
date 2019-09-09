@@ -1,6 +1,15 @@
 from time import time
 import numpy as np
 
+
+def transform_set(M, D):
+    # apply matrix M to first dim of D
+    K, N, _ = D.shape
+    op = np.zeros((K, N, N)) 
+    for i, d in enumerate(D): # enumerate goes along 1st dimension (aka batches)
+        op[i] = M.dot(d.dot(M.T))
+    return op
+
 def phams(A, threshold=np.sqrt(np.spacing(1))):
     '''
     einsum based implementation of jade algorithm
@@ -9,22 +18,27 @@ def phams(A, threshold=np.sqrt(np.spacing(1))):
     m = A.shape[1]
     k = A.shape[0]
     V = np.eye(m)
+    A_mean = np.mean(A, axis=0)
+    vals, vecs = np.linalg.eigh(A_mean)
+    V = vecs.T / np.sqrt(vals[:, None])
+    A = transform_set(V, A)
+
     threshold = np.sqrt(np.spacing(1))
     active = 1
     while active == 1:
         active = 0
         decr = 0
-        for i in range(1, m):
-            for j in range(i):
+        for i in range(0, m):
+            for j in range(0, i):
                 # computation of rotations           
 
-                Cii = A[:, i, i] # BCB_ii
-                Cjj = A[:, j, j] # BCB_jj
-                Cij = A[:, i, j] # BCB_ij
+                Cii = A[:, i, i] 
+                Cjj = A[:, j, j]
+                Cij = A[:, i, j]
 
                 # find g_ij (2.4)
-                g12 = np.mean(Cij / Cii) # (2.4)? BCB_ij/ BCB_ii
-                g21 = np.mean(Cij / Cjj) # (2.4)? BCB_ij/ BCB_jj
+                g12 = np.mean(Cij / Cii)
+                g21 = np.mean(Cij / Cjj)
 
                 # find w_ij (2.7)
                 omega21 = np.mean(Cii / Cjj)
@@ -39,6 +53,7 @@ def phams(A, threshold=np.sqrt(np.spacing(1))):
                 h21 = np.conj((tmp1 - tmp2) / tmp) # actually says to change the indexes, is equivalent?
 
                 decr += k * (g12 * np.conj(h12) + g21 * h21) / 2.0
+                print(decr)
 
                 tmp = 1 + 1.j * 0.5 * np.imag(h12 * h21)
                 tmp = np.real(tmp + np.sqrt(tmp ** 2 - h12 * h21))
@@ -70,4 +85,5 @@ if __name__ == '__main__':
     VA = np.abs(Vhat.dot(V))  # undo negative scaling 
     VA /= np.max(VA, axis=1, keepdims=True) # normalize to 1
     VA[np.abs(VA) < 1e-12] = 0. # numerical tolerance
+    print(VA)
     assert_array_equal(VA[np.lexsort(VA)], np.eye(p))
