@@ -25,7 +25,6 @@ def memsize(DataTensor):
     s = round(size_bytes / p, 2)
     return "%s %s" % (s, size_name[i])
 
-
 # JADE utility functions
 def scheduler(tournament):
     '''return next draw of tournament table'''
@@ -83,7 +82,7 @@ def rotmat(A, tournament):
     return J, ssum
 
 
-def parjade(A, thres=1.0E-12, maxiter=1000):
+def parjade(A, threshold=1.0E-12, maxiter=1000):
 
     A = A.clone() # avoid override of original
     A, pad_flag = pad(A) # pad if necessary
@@ -93,7 +92,6 @@ def parjade(A, thres=1.0E-12, maxiter=1000):
     tournament = th.randperm(m).reshape(2, m//2); # init tournament table
     
     # assign stopping criteria
-    threshold = thres
     active = th.tensor(1, dtype=th.uint8)
     n_iter = 0
     
@@ -118,7 +116,7 @@ def parjade(A, thres=1.0E-12, maxiter=1000):
             print(n_iter, offdiag(A))
 
     print(n_iter, 'of', maxiter, 'iterations')
-    print('reached convergence threshold:', not(bool(active)))
+    print('desired convergence met?', not(bool(active)))
     print('Frobenius Norm of Offdiagonal(A):', offdiag(A))
 
     # undo zero padding, if flag is set
@@ -129,9 +127,9 @@ def parjade(A, thres=1.0E-12, maxiter=1000):
 
 if __name__ == '__main__':
         
-    th.set_default_tensor_type('torch.cuda.FloatTensor')
-    device = th.device("cuda") 
-    th.cuda.get_device_name(device)
+    # th.set_default_tensor_type('torch.cuda.FloatTensor')
+    # device = th.device("cuda") 
+    # th.cuda.get_device_name(device)
     M = gentest(100, 100, 0)
 
     A, V, n_iter = parjade(M)
