@@ -18,6 +18,7 @@ def init_tournament(m):
         tournament = np.random.permutation(m)
         tournament = np.insert(tournament,0,m).reshape(2, (m+1)//2)
         padflag = 1
+    return tournament, padflag
 
 def scheduler(tournament):
     '''return next draw of tournament table'''
@@ -89,7 +90,7 @@ def phams(Gamma, threshold=1e-50, maxiter=1000, mean_initialize=False):
     m = C.shape[1]
     B = np.eye(m)
 
-    tournament = init_tournament(m)
+    tournament, padflag = init_tournament(m)
     
     # precompute B
     if mean_initialize:
@@ -123,9 +124,11 @@ if __name__ == '__main__':
 
     rng = np.random.RandomState(42) 
     
-    diagonals = rng.uniform(size=(k, m))
-    B = rng.randn(m, m)  # mixing matrix
-    M = np.array([B.dot(d[:, None] * B.T) for d in diagonals])  # dataset
+    # diagonals = rng.uniform(size=(k, m))
+    # B = rng.randn(m, m)  # mixing matrix
+    # M = np.array([B.dot(d[:, None] * B.T) for d in diagonals])  # dataset
+
+
     Bhat, _ = phams(M)
 
     # check if B and Bhat are identical up to permutation and scaling
