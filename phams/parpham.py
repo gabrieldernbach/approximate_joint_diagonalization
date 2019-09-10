@@ -9,6 +9,16 @@ def mean_rotation(C):
     C = B[None,:,:] @ M @ B.T[None,:,:]
     return B, C
 
+def init_tournament(m):
+    '''initialize random tournament table with pairwise groups'''
+    if m % 2 == 0:
+        tournament = np.random.permutation(m).reshape(2, m//2)
+        padflag = 0
+    else:
+        tournament = np.random.permutation(m)
+        tournament = np.insert(tournament,0,m).reshape(2, (m+1)//2)
+        padflag = 1
+
 def scheduler(tournament):
     '''return next draw of tournament table'''
     old = tournament
@@ -23,7 +33,7 @@ def scheduler(tournament):
     new[1, :-1] = old[1, 1:]
     return new
 
-def rotmat(C,tournament):
+def rotmat(C,tournament, padflag):
     '''
     compute update matrix according to phams method see:
     D. T. Pham, “Joint Approximate Diagonalization of Positive Definite Hermitian Matrices,”
@@ -33,8 +43,8 @@ def rotmat(C,tournament):
     m = C.shape[1]
     k = C.shape[0]
 
-    i = tournament.min(axis=0)
-    j = tournament.max(axis=0)
+    i = tournament[:,padflag:].min(axis=0)
+    j = tournament[:,padflag:].max(axis=0)
 
     C_ii = C[:, i, i] 
     C_jj = C[:, j, j]
@@ -69,6 +79,7 @@ def rotmat(C,tournament):
 
     return T, decrease
 
+
 def phams(Gamma, threshold=1e-50, maxiter=1000, mean_initialize=False):
     '''
     find approximate joint diagonalization of set of square matrices Gamma,
@@ -77,9 +88,9 @@ def phams(Gamma, threshold=1e-50, maxiter=1000, mean_initialize=False):
     C = np.copy(Gamma)
     m = C.shape[1]
     B = np.eye(m)
-    
-    tournament = np.random.permutation(m).reshape(2, m//2)
 
+    tournament = init_tournament(m)
+    
     # precompute B
     if mean_initialize:
         B, C = mean_rotation(C)
@@ -89,7 +100,7 @@ def phams(Gamma, threshold=1e-50, maxiter=1000, mean_initialize=False):
     
     while active == 1 and n_iter < maxiter:
         # computation of rotations           
-        T, decrease = rotmat(C, tournament)
+        T, decrease = rotmat(C, tournament, padflag)
         print(decrease)
 
         # update of C and B matrices
@@ -108,7 +119,7 @@ if __name__ == '__main__':
 
     """Test approximate joint diagonalization."""
     # create k matrices of shape m x m
-    k, m = 150, 150
+    k, m = 80, 81
 
     rng = np.random.RandomState(42) 
     
