@@ -1,6 +1,11 @@
 from time import time
 import numpy as np
-from numba import jit, njit
+
+def loss(C):
+    l = 0
+    for i in range(C.shape[0]):
+        l += np.sum(np.log(np.diag(C[i,:,:]))) - np.log(np.linalg.det(C[i,:,:]))
+    return l
 
 def mean_rotation(C):
     C_mean = np.mean(C, axis=0)
@@ -34,13 +39,12 @@ def scheduler(tournament):
     new[1, :-1] = old[1, 1:]
     return new
 
-def rotmat(C,tournament, padflag):
+def rotmat(C, tournament, padflag):
     '''
     compute update matrix according to phams method see:
     D. T. Pham, “Joint Approximate Diagonalization of Positive Definite Hermitian Matrices,”
     SIAM Journal on Matrix Analysis and Applications, vol. 22, no. 4, pp. 1136–1152, Jan. 2001.
     '''
-
     m = C.shape[1]
     k = C.shape[0]
 
@@ -80,7 +84,6 @@ def rotmat(C,tournament, padflag):
 
     return T, decrease
 
-
 def phams(Gamma, threshold=1e-50, maxiter=1000, mean_initialize=False):
     '''
     find approximate joint diagonalization of set of square matrices Gamma,
@@ -112,31 +115,35 @@ def phams(Gamma, threshold=1e-50, maxiter=1000, mean_initialize=False):
         n_iter += 1
         active = np.abs(decrease) > threshold
 
-    return B, C 
+    return B, C , n_iter
 
+def gentest(num_matrices=40, shape_matrices=60):
+    '''
+    generate testcase for joint approximate diagonalization
+    under assumption of non orthogonal joint basis.
+    '''
+    rng = np.random.RandomState(42)
+    # draw random diagonal
+    diagonals = rng.uniform(size=(num_matrices, shape_matrices))
+    # generate joint mixing matrix
+    B = rng.randn(shape_matrices, shape_matrices)
+    # rotate diagonals by mixing matrix
+    M = np.array([B.dot(d[:, None] * B.T) for d in diagonals])
+    return B, M
 
 if __name__ == '__main__':
-    from numpy.testing import assert_array_equal
-
     """Test approximate joint diagonalization."""
     # create k matrices of shape m x m
-    k, m = 80, 81
+    basis, setM = gentest(num_matrices=40, shape_matrices=60)
 
-    rng = np.random.RandomState(42) 
-    
-    # diagonals = rng.uniform(size=(k, m))
-    # B = rng.randn(m, m)  # mixing matrix
-    # M = np.array([B.dot(d[:, None] * B.T) for d in diagonals])  # dataset
+    print(f'initial loss: {loss(setM):.5f}')
+    basis_hat, setM_hat, n_iter = phams(setM)
+    print(f'final loss: {loss(setM_hat)}')
 
-
-    Bhat, _ = phams(M)
-
-    # check if B and Bhat are identical up to permutation and scaling
-    BA = np.abs(Bhat.dot(B))  # undo negative scaling 
+    # check if basis and basis_hat are identical up to permutation and scaling
+    from numpy.testing import assert_array_equal
+    BA = np.abs(basis_hat.dot(basis))  # undo negative scaling 
     BA /= np.max(BA, axis=1, keepdims=True) # normalize to 1
     BA[np.abs(BA) < 1e-12] = 0. # numerical tolerance
     print(BA)
-    import matplotlib.pyplot as plt
-    plt.imshow(BA @ BA.T)
-    plt.show()
-    assert_array_equal(BA[np.lexsort(BA)], np.eye(m))
+    assert_array_equal(BA[np.lexsort(BA)], np.eye(BA.shape[0]))

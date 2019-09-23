@@ -1,16 +1,21 @@
-#!/Usr/bin/env python
-# coding: utf-8
-
+from time import time
+import numpy as np
 import torch as th
-import torch
+
+def loss(C):
+    l = 0
+    for i in range(C.shape[0]):
+        log_determinant_diagonal = th.sum(th.log(th.diag(C[i,:,:])))
+        log_determinant = 2* th.sum(th.log(th.diag(th.cholesky(C[i,:,:]))))
+        l += log_determinant_diagonal - log_determinant
+    return l
 
 def mean_rotation(C):
     C_mean = th.mean(C, dim=0)
     vals, vecs = th.symeig(C_mean)
     B = vecs.T / th.sqrt(vals[:, None])
-    C = B[None,:,:] @ M @ B.T[None,:,:]
+    C = B[None,:,:] @ C @ B.T[None,:,:]
     return B, C
-
 
 def init_tournament(m):
     '''initialize random tournament table with pairwise groups'''
@@ -19,11 +24,9 @@ def init_tournament(m):
         padflag = 0
     else:
         tournament = th.randperm(m)
-        m0 = torch.tensor(m).view(1)
-        tournament = th.cat((m0,tournament)).reshape(2, (m+1)//2)
+        tournament = th.insert(tournament,0,m).reshape(2, (m+1)//2)
         padflag = 1
     return tournament, padflag
-
 
 def scheduler(tournament):
     '''return next draw of tournament table'''
@@ -39,14 +42,12 @@ def scheduler(tournament):
     new[1, :-1] = old[1, 1:]
     return new
 
-
 def rotmat(C,tournament, padflag):
     '''
     compute update matrix according to phams method see:
     D. T. Pham, “Joint Approximate Diagonalization of Positive Definite Hermitian Matrices,”
     SIAM Journal on Matrix Analysis and Applications, vol. 22, no. 4, pp. 1136–1152, Jan. 2001.
     '''
-
     m = C.shape[1]
     k = C.shape[0]
 
@@ -60,54 +61,30 @@ def rotmat(C,tournament, padflag):
     # find g_ij (2.04)
     g_ij = th.mean(C_ij / C_ii, dim=0)
     g_ji = th.mean(C_ij / C_jj, dim=0)
-    g = th.stack([ g_ij, g_ji])
 
     # find w_ij (2.07) with w_ii, w_jj = 1, 1
     w_ij = th.mean(C_jj / C_ii, dim=0)
     w_ji = th.mean(C_ii / C_jj, dim=0)
-    ones = th.ones(w_ij.shape)
-    Wu = th.stack([w_ij, ones])
-    Wl = th.stack([ones, w_ji])
-    W = th.stack([Wu, Wl]).permute(2,0,1)
 
-    
     # solve 2.10, that is find h such that W @ h = g
-    U,S,V = th.svd(W)
-    c = U.transpose(2,1) @ g.transpose(1,0)[:,:,None]
-    y = 1/S * c.squeeze()
-    h = (U @ y[:,:,None]).squeeze().transpose(1,0)
-    h12, h21 = h[0], h[1]
-
-    #y = 1/diag(U.transpose(1,0) @ g
-
-   # h = V.transpose(0,1) @ 
-
-    # w_tilde_ji = th.sqrt(w_ji / w_ij)
-    # w_prod = th.sqrt(w_ij * w_ji)
-    # tmp1 = (w_tilde_ji * g_ij + g_ji) / (w_prod + 1)
-    # tmp2 = (w_tilde_ji * g_ij - g_ji) / th.max(w_prod - 1, th.tensor(1e-9).view(1)) 
-    # h12 = tmp1 + tmp2 # (2.10)
-    # w_tilde_ij = th.sqrt(w_ij / w_ji)
-    # tmp1 = (w_tilde_ij * g_ji + g_ij) / (w_prod + 1)
-    # tmp2 = (w_tilde_ij * g_ji - g_ij) / th.max(w_prod - 1, th.tensor(1e-9).view(1)) 
-    # h21 = tmp1 - tmp2 / w_tilde_ji # h21 = th.conj((tmp1 - tmp2) / w_tilde_ji)
+    w_tilde_ji = th.sqrt(w_ji / w_ij)
+    w_prod = th.sqrt(w_ij * w_ji)
+    tmp1 = (w_tilde_ji * g_ij + g_ji) / (w_prod + 1)
+    tmp2 = (w_tilde_ji * g_ij - g_ji) / th.max(w_prod - 1, th.tensor(1e-9,dtype=th.float)) 
+    h12 = tmp1 + tmp2 # (2.10)
+    h21 = ((tmp1 - tmp2) / w_tilde_ji)
 
     # cumulative decrease in current sweep
-    # decrease = th.sum(k * (g_ij * th.conj(h12) + g_ji * h21) / 2.0)
     decrease = th.sum(k * (g_ij * h12 + g_ji * h21) / 2.0)
-    
 
     # construct T by 2.08
-    # tmp = 1 + 1.j * 0.5 * th.imag(h12 * h21)
-    # tmp = th.real(tmp + th.sqrt(tmp ** 2 - h12 * h21))
-    tmp = 2 / (1 + th.sqrt(1 - 4 * h12 * h21))
+    tmp = 1 + th.sqrt(1 - h12 * h21)
 
     T = th.eye(m)
-    T[i, j] = -h12 #/ tmp
-    T[j, i] = -h21 #/ tmp
+    T[i, j] = -h12 / tmp
+    T[j, i] = -h21 / tmp
 
     return T, decrease
-
 
 def phams(Gamma, threshold=1e-50, maxiter=1000, mean_initialize=False):
     '''
@@ -133,42 +110,59 @@ def phams(Gamma, threshold=1e-50, maxiter=1000, mean_initialize=False):
         print(decrease)
 
         # update of C and B matrices
-        C = T @ C @ T.transpose(0,1)
+        C = T @ C @ T.T
         B = T @ B
 
         tournament = scheduler(tournament)
         n_iter += 1
         active = th.abs(decrease) > threshold
 
-    return B, C 
+    return B, C , n_iter
 
-if __name__ == '__main__':
-
-    """Test approximate joint diagonalization."""
-    # create k matrices of shape m x m
-    k, m = 20, 40
-
+def gentest(num_matrices=40, shape_matrices=60):
+    '''
+    generate testcase for joint approximate diagonalization
+    under assumption of non orthogonal joint basis.
+    '''
+    k = num_matrices
+    m = shape_matrices
     rng = th.manual_seed(42) 
-    
+    # draw random diagonal
     rand = th.abs(th.rand(k, m, m))
     diag = th.eye(m, m)
     diag = diag[None, :, :] * rand
+    # generate joint mixing matrix
     B = th.randn(m, m)
+    # rotate diagonals by mixing matrix
     M = B[None, : ,:] @ diag @ B.transpose(1, 0)[None, :, :]
-    
-    Bhat, _ = phams(M)
+    return B, M
+
+if __name__ == '__main__':
+    """Test approximate joint diagonalization."""
+    # create k matrices of shape m x m
+    basis, setM = gentest(num_matrices=40, shape_matrices=60)
+
+    print(f'initial loss: {loss(setM):.5f}')
+    basis_hat, setM_hat, n_iter = phams(setM)
+    print(f'final loss: {loss(setM_hat)}')
+
+
+    import matplotlib.pyplot as plt
+    import matplotlib; matplotlib.use('TkAgg')
+    plt.subplot(211)
+    plt.imshow(basis_hat.numpy())
+    plt.subplot(212)
+    plt.imshow(basis.numpy())
+    plt.show()
 
     
-    # check if B and Bhat are identical up to permutation and scaling
-    BA = th.abs(Bhat @ B)  # undo negative scaling 
-    BA /= th.max(BA, dim=1, keepdims=True)[0] # normalize to 1
-    BA[th.abs(BA) < 1e-12] = 0. # numerical tolerance
-    print(BA)
-    import matplotlib.pyplot as plt
-    plt.imshow(BA @ BA.T)
-    plt.show()
-    
-    from numpy.testing import assert_array_equal
-    import numpy as np
-    BA = BA.numpy()
-    assert_array_equal(BA[np.lexsort(BA)], np.eye(m))
+
+    # # check if basis and basis_hat are identical up to permutation and scaling
+    # import numpy as np
+    # from numpy.testing import assert_array_equal
+    # BA = np.abs(basis_hat.numpy().dot(basis.numpy()))  # undo negative scaling 
+    # BA /= np.max(BA, axis=1, keepdims=True) # normalize to 1
+    # BA[np.abs(BA) < 1e-12] = 0. # numerical tolerance
+    # print(BA)
+    # assert_array_equal(BA[np.lexsort(BA)], np.eye(BA.shape[0]))
+
