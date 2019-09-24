@@ -32,7 +32,7 @@ def scheduler(tournament):
     '''return next draw of tournament table'''
     old = tournament
     new = th.zeros(old.shape, dtype=th.int64)
-    
+
     # players of row 0
     new[0, 0] = old[0, 0]
     new[0, 1] = old[1, 0]
@@ -54,7 +54,7 @@ def rotmat(C,tournament, padflag):
     i = tournament[:,padflag:].min(dim=0)[0]
     j = tournament[:,padflag:].max(dim=0)[0]
 
-    C_ii = C[:, i, i] 
+    C_ii = C[:, i, i]
     C_jj = C[:, j, j]
     C_ij = C[:, i, j]
 
@@ -70,7 +70,7 @@ def rotmat(C,tournament, padflag):
     w_tilde_ji = th.sqrt(w_ji / w_ij)
     w_prod = th.sqrt(w_ij * w_ji)
     tmp1 = (w_tilde_ji * g_ij + g_ji) / (w_prod + 1)
-    tmp2 = (w_tilde_ji * g_ij - g_ji) / th.max(w_prod - 1, th.tensor(1e-9,dtype=th.float)) 
+    tmp2 = (w_tilde_ji * g_ij - g_ji) / th.max(w_prod - 1, th.tensor(1e-9).type(th.float64))
     h12 = tmp1 + tmp2 # (2.10)
     h21 = ((tmp1 - tmp2) / w_tilde_ji)
 
@@ -80,7 +80,7 @@ def rotmat(C,tournament, padflag):
     # construct T by 2.08
     tmp = 1 + th.sqrt(1 - h12 * h21)
 
-    T = th.eye(m)
+    T = th.eye(m).type(th.float64)
     T[i, j] = -h12 / tmp
     T[j, i] = -h21 / tmp
 
@@ -93,22 +93,24 @@ def phams(Gamma, threshold=1e-50, maxiter=1000, mean_initialize=False):
     '''
     C = Gamma.clone()
     m = C.shape[1]
-    B = th.eye(m)
+    B = th.eye(m).type(th.float64)
 
     tournament, padflag = init_tournament(m)
-    
+
     # precompute B
     if mean_initialize:
         B, C = mean_rotation(C)
- 
+
     active = 1
     n_iter = 0
-    
+
     while active == 1 and n_iter < maxiter:
         # computation of rotations           
         T, decrease = rotmat(C, tournament, padflag)
         print(decrease)
 
+        #plt.imshow(T.numpy(),vmin=-1,vmax=1)
+        #plt.savefig(f'plot_{n_iter:00f}.jpg')
         # update of C and B matrices
         C = T @ C @ T.T
         B = T @ B
@@ -126,7 +128,7 @@ def gentest(num_matrices=40, shape_matrices=60):
     '''
     k = num_matrices
     m = shape_matrices
-    rng = th.manual_seed(42) 
+    rng = th.manual_seed(42)
     # draw random diagonal
     rand = th.abs(th.rand(k, m, m))
     diag = th.eye(m, m)
@@ -139,30 +141,35 @@ def gentest(num_matrices=40, shape_matrices=60):
 
 if __name__ == '__main__':
     """Test approximate joint diagonalization."""
-    # create k matrices of shape m x m
-    basis, setM = gentest(num_matrices=40, shape_matrices=60)
-
-    print(f'initial loss: {loss(setM):.5f}')
-    basis_hat, setM_hat, n_iter = phams(setM)
-    print(f'final loss: {loss(setM_hat)}')
-
-
     import matplotlib.pyplot as plt
     import matplotlib; matplotlib.use('TkAgg')
-    plt.subplot(211)
-    plt.imshow(basis_hat.numpy())
-    plt.subplot(212)
-    plt.imshow(basis.numpy())
-    plt.show()
+    # create k matrices of shape m x m
+    basis, setM = gentest(num_matrices=40, shape_matrices=60)
+    test = np.load('test.npz')
 
-    
 
-    # # check if basis and basis_hat are identical up to permutation and scaling
-    # import numpy as np
-    # from numpy.testing import assert_array_equal
-    # BA = np.abs(basis_hat.numpy().dot(basis.numpy()))  # undo negative scaling 
-    # BA /= np.max(BA, axis=1, keepdims=True) # normalize to 1
-    # BA[np.abs(BA) < 1e-12] = 0. # numerical tolerance
-    # print(BA)
-    # assert_array_equal(BA[np.lexsort(BA)], np.eye(BA.shape[0]))
+    print(f'initial loss: {loss(setM):.5f}')
+    basis_hat, setM_hat, n_iter = phams(th.from_numpy(test['setM']).type(th.float64))
+    print(f'final loss: {loss(setM_hat)}')
+
+    print(th.sum((basis_hat @ th.from_numpy(test['setM']).type(th.float64) @ basis_hat.T - setM_hat)**2))
+
+    # print(f"expected loss: {loss(th.from_numpy(test['setM_hat']).type(th.float))}")
+    # plt.subplot(211)
+    # plt.imshow(basis.numpy())
+    # plt.subplot(212)
+    # plt.imshow(basis_hat.numpy())
+    # plt.show()
+
+
+    # check if basis and basis_hat are identical up to permutation and scaling
+    import numpy as np
+    from numpy.testing import assert_array_equal
+    basis_hat = basis_hat.numpy()
+    basis = test['basis']
+    BA = np.abs(basis_hat.dot(basis))  # undo negative scaling 
+    BA /= np.max(BA, axis=1, keepdims=True) # normalize to 1
+    BA[np.abs(BA) < 1e-12] = 0. # numerical tolerance
+    print(BA)
+    assert_array_equal(BA[np.lexsort(BA)], np.eye(BA.shape[0]))
 

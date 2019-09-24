@@ -109,7 +109,7 @@ def ajd_pham(X, tol=1e-14, max_iter=1000, return_B_list=False, verbose=False):
     infos = {'t_list': t_list}
     if return_B_list:
         infos['B_list'] = B_list
-    return V, infos
+    return V, A, infos
 
 
 if __name__ == '__main__':
@@ -122,7 +122,9 @@ if __name__ == '__main__':
     diagonals = rng.uniform(size=(n, p))
     V = rng.randn(p, p)  # mixing matrix
     M = np.array([V.dot(d[:, None] * V.T) for d in diagonals])  # dataset
-    Vhat, _ = ajd_pham(M)
+    Vhat, Mhat, _ = ajd_pham(M)
+
+    np.savez('test.npz',V=V, M=M, Vhat=Vhat, Mhat=Mhat)
 
     # check if V and Vhat are identical up to permutation and scaling
     VA = np.abs(Vhat.dot(V))  # undo negative scaling 

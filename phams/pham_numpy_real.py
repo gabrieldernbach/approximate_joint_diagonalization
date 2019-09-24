@@ -113,10 +113,20 @@ if __name__ == '__main__':
     basis_hat, setM_hat, n_iter = phams(setM)
     print(f'final loss: {loss(setM_hat)}')
 
+
+
     # check if basis and basis_hat are identical up to permutation and scaling
     from numpy.testing import assert_array_equal
     BA = np.abs(basis_hat.dot(basis))  # undo negative scaling 
     BA /= np.max(BA, axis=1, keepdims=True) # normalize to 1
     BA[np.abs(BA) < 1e-12] = 0. # numerical tolerance
     print(BA)
+    import matplotlib; matplotlib.use('TkAgg')
+    import matplotlib.pyplot as plt
+    plt.subplot(211)
+    plt.imshow(basis_hat)
+    plt.subplot(212)
+    import ipdb; ipdb.set_trace()
+    plt.imshow(BA[np.lexsort(BA)])
+    plt.show()
     assert_array_equal(BA[np.lexsort(BA)], np.eye(BA.shape[0]))

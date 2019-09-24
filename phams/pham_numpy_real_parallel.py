@@ -135,21 +135,20 @@ if __name__ == '__main__':
     # create k matrices of shape m x m
     basis, setM = gentest(num_matrices=40, shape_matrices=60)
 
-    import matplotlib.pyplot as plt
-    import matplotlib; matplotlib.use('TkAgg')
-    plt.imshow(np.mean(setM,axis=0))
-    plt.show()
+    # import matplotlib.pyplot as plt
+    # import matplotlib; matplotlib.use('TkAgg')
+    # plt.imshow(np.mean(setM,axis=0))
+    # plt.show()
 
     print(f'initial loss: {loss(setM):.5f}')
     basis_hat, setM_hat, n_iter = phams(setM)
     print(f'final loss: {loss(setM_hat)}')
 
-    import ipdb; ipdb.set_trace()
-    print(np.sum((setM - basis_hat.T @ setM_hat @ basis_hat)**2))
-    # # check if basis and basis_hat are identical up to permutation and scaling
-    # from numpy.testing import assert_array_equal
-    # BA = np.abs(basis_hat.dot(basis))  # undo negative scaling 
-    # BA /= np.max(BA, axis=1, keepdims=True) # normalize to 1
-    # BA[np.abs(BA) < 1e-12] = 0. # numerical tolerance
-    # print(BA)
-    # assert_array_equal(BA[np.lexsort(BA)], np.eye(BA.shape[0]))
+    print(np.sum((basis_hat @ setM @ basis_hat.T - setM_hat)**2))
+    # check if basis and basis_hat are identical up to permutation and scaling
+    from numpy.testing import assert_array_equal
+    BA = np.abs(basis_hat.dot(basis))  # undo negative scaling 
+    BA /= np.max(BA, axis=1, keepdims=True) # normalize to 1
+    BA[np.abs(BA) < 1e-12] = 0. # numerical tolerance
+    print(BA)
+    assert_array_equal(BA[np.lexsort(BA)], np.eye(BA.shape[0]))
