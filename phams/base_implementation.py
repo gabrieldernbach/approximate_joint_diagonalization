@@ -130,7 +130,7 @@ if __name__ == '__main__':
     VA = np.abs(Vhat.dot(V))  # undo negative scaling 
     VA /= np.max(VA, axis=1, keepdims=True) # normalize to 1
     VA[np.abs(VA) < 1e-12] = 0. # numerical tolerance
-    print(VA)
+    print('check', sum(VA) == len(VA))
 #    import ipdb; ipdb.set_trace()
     import matplotlib.pyplot as plt
     plt.imshow(VA @ VA.T)
