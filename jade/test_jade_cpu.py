@@ -20,19 +20,18 @@ def check(U, V):
     from numpy.testing import assert_array_equal
     assert_array_equal(UV, np.eye(len(UV)))
 
-def generate_case():
+def generate_case(k=5, m=5, sigma=0):
     """
     generates a test case with known solution U
     :return: M (k x m x m), U (m x m)
     """
     np.random.seed(1)
-    m = 5
-    k = 5
     U, S, _ = np.linalg.svd(np.random.randn(m, m))
     rand = np.random.randn(k, m, m)
     diag = np.eye(m, m)
     randdiag = diag[None, :, :] * rand
     M = U[None, :, :] @ randdiag @ U.T[None, :, :]
+    M += np.random.randn(k, m, m) * sigma
     return M, U
 
 
