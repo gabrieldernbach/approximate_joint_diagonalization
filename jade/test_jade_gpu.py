@@ -4,7 +4,7 @@ import numpy as np
 from jade.jade_gpu import memory_size, jade_par
 
 
-def generate_case(m=5, k=5, noise=0):
+def generate_case(k=5, m=5, noise=0):
     """
     k matrices of m by m size, normal noise multiplied by noise=0
     """

@@ -112,7 +112,7 @@ def jade_jit(A, threshold=10e-16):
     return A, V
 
 
-@njit
+# @njit
 def tournament(top, bot, n):
     """
     computes the next round in the tournament.
@@ -137,15 +137,15 @@ def tournament(top, bot, n):
     newbot[-1] = top[-1]
     return newtop, newbot
 
-
 @njit
 def pad(A):
     """
-    adds 0 padding to last row and last column of tensor A.
+    if square shape of A (k x m x m) is odd - e.g. (m % 2) != 0
+    add 0 padding to last row and last column of tensor A
 
     :param A: ndarray of shape k x m x m
-    :return: ndarray of shape k x (m+1) x (m+1),
-             bool that indicates whether padding was applied
+    :return: A ndarray of shape (k x (m+1) x (m+1)) or (k x m x m),
+             pad_flag bool that indicates whether padding was applied
     """
     if A.shape[1] % 2 is not 0:
         pad_flag = 1

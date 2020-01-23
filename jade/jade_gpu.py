@@ -142,12 +142,11 @@ def jade_par(A, threshold=10e-50, maxiter=1000):
 
         # evaluate stopping criteria
         n_iter += 1
-        print(th.sum(ssum).item())
         if threshold is not None:
             active = th.sum(ssum) > threshold
 
         # verbose monitoring:
-        if n_iter % 100 == 0:
+        if n_iter % 10 == 0:
             print(n_iter, offdiag(A))
 
     print(n_iter, 'of', maxiter, 'iterations')

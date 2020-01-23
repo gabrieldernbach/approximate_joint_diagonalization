@@ -1,5 +1,5 @@
 import numpy as np
-from jade.jade_cpu import jade, jade_jit, jade_parallel
+from jade.jade_cpu import jade, jade_jit, jade_parallel, pad
 
 
 def check(U, V):
@@ -20,7 +20,7 @@ def check(U, V):
     from numpy.testing import assert_array_equal
     assert_array_equal(UV, np.eye(len(UV)))
 
-def generate_case(k=5, m=5, sigma=0):
+def generate_case(k=5, m=6, sigma=0):
     """
     generates a test case with known solution U
     :return: M (k x m x m), U (m x m)
@@ -50,7 +50,16 @@ def test_jade_jit():
 
 
 def test_jade_par():
-    M, U = generate_case()
+    M, U = generate_case(4, 7)
+    A, V = jade_parallel(M)
+    check(V, U)
+    M, U = generate_case(5, 5)
     A, V = jade_parallel(M)
     check(V, U)
     pass
+
+def test_pad():
+    M, U = generate_case(5, 5, 0)
+    assert pad(M)[0].shape[1] == 6
+    M, U = generate_case(6, 6, 0)
+    assert pad(M)[0].shape[1] == 6
