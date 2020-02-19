@@ -1,12 +1,18 @@
 import numpy as np
+
 from jade.jade_cpu import jade, jade_jit, jade_parallel, pad
 
 
 def check(U, V):
     """
-    rough check about U and V should be orthogonal
-    :param U: ndarray of shape (m x m)
-    :param V: ndarray of shape (m x m)
+    checks if U and V are orthogonal
+
+    Args:
+        U: np.ndarray
+        V: np.ndarray
+
+    Returns:
+        None
     """
     # check if orthogonal and undo arbitrary sign
     UV = np.abs(U.T @ V)
@@ -20,10 +26,24 @@ def check(U, V):
     from numpy.testing import assert_array_equal
     assert_array_equal(UV, np.eye(len(UV)))
 
+
 def generate_case(k=5, m=6, sigma=0):
     """
-    generates a test case with known solution U
-    :return: M (k x m x m), U (m x m)
+    generates a test case with known solution eigenvectors U
+
+    Args:
+        k: int
+            number of matrices to stack
+        m: int
+            square dimension of matrices
+        sigma: float
+            std of noise to be added to the observed data
+
+    Returns:
+        M: np.ndarray
+            tensor containing k matrices of shape m x m
+        U: np.ndarray
+            matrix containing the true joint eigenvalues of the matrices in M
     """
     np.random.seed(1)
     U, S, _ = np.linalg.svd(np.random.randn(m, m))
@@ -57,6 +77,7 @@ def test_jade_par():
     A, V = jade_parallel(M)
     check(V, U)
     pass
+
 
 def test_pad():
     M, U = generate_case(5, 5, 0)

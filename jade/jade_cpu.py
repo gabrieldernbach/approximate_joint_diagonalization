@@ -11,8 +11,13 @@ def offdiagonal_frobenius(A):
     computes the frobenius norm of the off diagonal elements
     of the tensor A (k x m x m)
 
-    :param A: ndarray of shape k x m x m
-    :return: norm, the frobenius norm of the offdiagonal of A
+    Args:
+        A: np.ndarray
+            of shape k x m x m
+
+    Returns:
+        norm: np.ndarray
+            the frobenius norm of the offdiagonal of A
     """
     mask = 1 - np.eye(A.shape[1])
     offdiag = A * mask
@@ -28,9 +33,17 @@ def jade(A, threshold=10e-16):
     It returns the basis V as well as the remaining diagonal
     and possible residual terms of A.
 
-    :param A: ndarray of shape k x m x m
-    :param threshold: float used for stop
-    :return: A (k x m x m) V (m x m)
+    Args:
+        A: np.ndarray
+            Tensor of shape (k x m x m) to be diagonalized
+        threshold: float
+            stopping criterion, stops is update angle is less than threshold
+
+    Returns:
+        A: np.ndarray
+            Tensor of shape (k x m x m) in approximate diagonal form (approximate eigenvalues)
+        V: np.ndarray
+            Matrix of shape (m x m) that contains the approximate joint eigenvectors
     """
     A = np.copy(A)
     m = A.shape[1]
@@ -63,18 +76,19 @@ def jade(A, threshold=10e-16):
 @njit
 def jade_jit(A, threshold=10e-16):
     """
-    computes the joint diagonal basis v (m x m) of a set of
-    k square matrices provided in a (k x m x m).
+    jade algorithm in just in time compilation compatible form
 
-    it returns the basis v as well as the remaining diagonal
-    and possible residual terms of a.
+    Args:
+        A: np.ndarray
+            Tensor of shape (k x m x m) to be diagonalized
+        threshold: float
+            stopping criterion, stops is update angle is less than threshold
 
-    note: numba did not support einsum
-
-
-    :param A: ndarray of shape k x m x m
-    :param threshold: float used for stop
-    :return: a (k x m x m) v (m x m)
+    Returns:
+        A: np.ndarray
+            Tensor of shape (k x m x m) in approximate diagonal form (approximate eigenvalues)
+        V: np.ndarray
+            Matrix of shape (m x m) that contains the approximate joint eigenvectors
     """
     A = np.copy(A)
     m = A.shape[1]
@@ -112,20 +126,27 @@ def jade_jit(A, threshold=10e-16):
     return A, V
 
 
-# @njit
+@njit
 def tournament(top, bot, n):
-    """
-    computes the next round in the tournament.
-    The n_th player of top will play against the n_th player
-    of the group bottom.
-    Rotation with fixed player at position 1 in top ensures
-    that all players will have played against each other exactly
-    one time during the complete tournament.
+    """computes the next round in the tournament.
 
-    :param top: previous players ids in group top
-    :param bot: prvious player ids in group bottom
-    :param n: number of players
-    :return: new grouping for tournament oppositions
+    The n_th player of top will play against the n_th player of the group bottom.
+    Rotation with fixed player at position 1 in top ensures that all players will
+    have played against each other exactly one time during the complete tournament.
+
+    Args:
+       top: np.ndarray
+            previous players ids for group top
+        bot: np.ndarray
+            previous player ids for group bottom
+        n: int
+            number of players
+
+    Returns:
+        newtop: np.ndarray
+            new list of player ids for group top
+        newbot:
+            new list of player ids for group bottom
     """
     m = n // 2
     newtop = np.arange(m)
@@ -137,15 +158,24 @@ def tournament(top, bot, n):
     newbot[-1] = top[-1]
     return newtop, newbot
 
+
 @njit
 def pad(A):
     """
     if square shape of A (k x m x m) is odd - e.g. (m % 2) != 0
     add 0 padding to last row and last column of tensor A
 
-    :param A: ndarray of shape k x m x m
-    :return: A ndarray of shape (k x (m+1) x (m+1)) or (k x m x m),
-             pad_flag bool that indicates whether padding was applied
+    Args:
+        A: np.pndarray
+            tensor of shape (k x m x m)
+
+    Returns:
+        A: np.ndarray
+            tensor of sahpe (k x (m+1) x (m+1) if padding was necessary,
+            else returns A
+
+        pad_flag: bool
+            indicator for whether padding was applied
     """
     if A.shape[1] % 2 is not 0:
         pad_flag = 1
@@ -162,11 +192,21 @@ def pad(A):
 @njit
 def jade_parallel(A, threshold=10e-12):
     """
-    Parallel implementation of joint approximate diagonalization
+    Parallelized implementation of joint approximate diagonalization.
 
-    :param A: ndarray of shape k x m x m
-    :param threshold: thershold for stopping (is more conservative as non parallel!)
-    :return: A (k x m x m), V (m x m)
+    Args:
+        A: np.ndarray
+            Tensor of shape (k x m x m)
+        threshold: float
+            Sets criterion to stop when the cumulated angles are below threshold.
+            Note that due to cumulation this threshold is different from the
+            non parallelized stopping criterion!
+
+    Returns:
+        A: np.ndarray
+            Tensor of shape (k x m x m) in approximate diagonal form (approximate eigenvalues)
+        V: np.ndarray
+            Matrix of shape (m x m) that contains the approximate joint eigenvectors
     """
     A = np.copy(A)
     A, pad_flag = pad(A)

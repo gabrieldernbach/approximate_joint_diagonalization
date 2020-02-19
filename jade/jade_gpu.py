@@ -8,11 +8,14 @@ th.set_default_tensor_type(th.DoubleTensor)
 
 def memory_size(DataTensor):
     """
-    counts the elements of the tensor, infers the data type
-    and returns the memory size in human readable format
+    compute the memorysize consumed by DataTensor in human readable format
 
-    :param DataTensor: torch tensor
-    :return: string of size in human readable format
+    Args:
+        DataTensor (): th.tensor
+
+    Returns:
+        size: str
+
     """
     size_bytes = DataTensor.element_size() * DataTensor.nelement()
     if size_bytes == 0:
@@ -25,12 +28,17 @@ def memory_size(DataTensor):
 
 
 def scheduler(tournament):
-    '''
+    """
     returns next draw of tournament table
 
-    :param tournament: ndarray of (2 x n//2) players
-    :return: ndarray of (2 x n//2) players
-    '''
+    Args:
+        tournament: ndarray
+            old tournament of (2 x n//2) players
+
+    Returns:
+        tournament: ndarray
+            new tournament of (2 x n//2) players
+    """
     old = tournament
     new = th.zeros(old.shape, dtype=th.int64)
 
@@ -48,9 +56,17 @@ def pad(A):
     """
     adds 0 padding to last row and last column of tensor A.
 
-    :param A: ndarray of shape k x m x m
-    :return: ndarray of shape k x (m+1) x (m+1),
-             bool that indicates whether padding was applied
+    Args:
+        A: ndarray
+            of shape k x m x m
+
+    Returns:
+        A: ndarray
+            of shape k x (m+1) x (m+1) if padding was necessary
+            else A is unchanged
+
+        padflag: bool
+            indicator of whether padding was applied
     """
     if A.shape[1] % 2 is not 0:
         pad_flag = 1
@@ -69,8 +85,12 @@ def offdiag(A):
     computes the frobenius norm of the off diagonal elements
     of the torch tensor A (k x m x m)
 
-    :param A: torch tensor of shape k x m x m
-    :return: norm, the frobenius norm of the offdiagonal of A
+    Args:
+        A: th.tensor
+            of shape k x m x m
+    Returns:
+         norm: th.tensor
+            the frobenius norm of the offdiagonal of A
     """
     mask = ((th.eye(A.shape[1])) == 0).type(th.float)
     offdiag = A * mask
@@ -80,10 +100,20 @@ def offdiag(A):
 
 def rotation_matrix(A, tournament):
     """
+    compute the rotation matrix that reduces those offdiagonal
+    entries of A which tournament specifies
 
-    :param A: torch tensor of shape (k x m x m)
-    :param tournament: torch tensor of shape (2 x m//2)
-    :return: J (m x m) and ssum (squared angle)
+    Args:
+        A: th.tensor
+            of shape (k x m x m)
+        tournament: torch tensor
+            of shape (2 x m//2)
+
+    Returns:
+        J: th.tensor
+            of shape (m x m)
+        ssum: th.tensor
+            squared angles of rotation
     """
     m = A.shape[1]
     J = th.zeros((m, m))
@@ -112,10 +142,21 @@ def jade_par(A, threshold=10e-50, maxiter=1000):
     Performs a parallel joint approximate diagonalization of tensor A and
     accumulates the necessary rotations in matrix V.
 
-    :param A: torch tensor of shape (k x m x m)
-    :param threshold: float as stopping criterion
-    :param maxiter: int determining maximum iterations
-    :return: A (k x m x m), V (m x m), n_iter
+    Args:
+        A: th.tensor
+            of shape (k x m x m)
+        threshold: float
+            stopping criterion on angles
+        maxiter: int
+            stoppint criterion on maximum iterations
+
+    Returns:
+        A: th.tensor
+            of shape (k x m x m)
+        V: th.tensor
+            of shape (m x m)
+        n_iter: th.tensor
+            number of iterations (sweeps) taken
     """
     A = A.clone()  # avoid override of original
     A, pad_flag = pad(A)  # pad if necessary

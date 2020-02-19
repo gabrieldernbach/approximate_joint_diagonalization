@@ -1,30 +1,30 @@
-from time import time
 import numpy as np
-from numba import jit, njit
 
 
 def loss(C):
-    '''
+    """
     loss to be minimized by phams method
-    '''
+    """
     l = 0
     for i in range(C.shape[0]):
-        l += np.sum(np.log(np.diag(C[i,:,:]))) - np.log(np.linalg.det(C[i,:,:]))
+        l += np.sum(np.log(np.diag(C[i, :, :]))) - np.log(np.linalg.det(C[i, :, :]))
     return l
+
 
 def mean_rotation(C):
     C_mean = np.mean(C, axis=0)
     vals, vecs = np.linalg.eigh(C_mean)
     B = vecs.T / np.sqrt(vals[:, None])
-    C = B[None,:,:] @ C @ B.T[None,:,:]
+    C = B[None, :, :] @ C @ B.T[None, :, :]
     return B, C
 
-def rotmat(C,i,j):
-    '''
+
+def rotmat(C, i, j):
+    """
     compute update matrix according to phams method see:
     D. T. Pham, “Joint Approximate Diagonalization of Positive Definite Hermitian Matrices,”
     SIAM Journal on Matrix Analysis and Applications, vol. 22, no. 4, pp. 1136–1152, Jan. 2001.
-    '''
+    """
 
     C_ii = C[:, i, i]
     C_jj = C[:, j, j]
@@ -43,7 +43,7 @@ def rotmat(C,i,j):
     w_prod = np.sqrt(w_ij * w_ji)
     tmp1 = (w_tilde_ji * g_ij + g_ji) / (w_prod + 1)
     tmp2 = (w_tilde_ji * g_ij - g_ji) / max(w_prod - 1, 1e-9)
-    h12 = tmp1 + tmp2 # (2.10)
+    h12 = tmp1 + tmp2  # (2.10)
     h21 = ((tmp1 - tmp2) / w_tilde_ji)
 
     # decrease in current step 
@@ -54,11 +54,12 @@ def rotmat(C,i,j):
     T = np.array([[1, -h12 / tmp], [-h21 / tmp, 1]])
     return T, decrease
 
+
 def phams(Gamma, threshold=1e-50, max_iter=8000, mean_initialize=True):
-    '''
+    """
     find approximate joint diagonalization of set of square matrices Gamma,
     returns joint basis B and corresponding set of approximate diagonals C
-    '''
+    """
     C = np.copy(Gamma)
     k, m, _ = C.shape
     B = np.eye(m)
@@ -72,23 +73,24 @@ def phams(Gamma, threshold=1e-50, max_iter=8000, mean_initialize=True):
         cum_decrease = 0
         for i in range(0, m):
             for j in range(0, i):
-                # compute update matrix T_ij (2.1) 
-                # that is ought to partially diagonalize C
-                T, decrease = rotmat(C,i,j)
+                # compute update matrix T_ij (2.1), that partially diagonalizes C
+                T, decrease = rotmat(C, i, j)
                 cum_decrease += decrease
 
                 # apply update T_ij to C and B matrices
-                # B is essentially collecting the successive updates chosen to diagonalize C
-                pair = np.array((i,j))
-                B[pair,:] = T @ B[pair,:]
-                C[:,:,pair] = C[:,:,pair] @ T.T[None,:,:]
-                C[:,pair,:] = T[None,:,:] @ C[:,pair,:]
+                # B collects the successive updates chosen to diagonalize C
+                pair = np.array((i, j))
+                B[pair, :] = T @ B[pair, :]
+                C[:, :, pair] = C[:, :, pair] @ T.T[None, :, :]
+                C[:, pair, :] = T[None, :, :] @ C[:, pair, :]
 
         # evaluate stopping criteria
+        print(decrease)
         active = np.abs(decrease) > threshold
         n_iter += 1
 
     return B, C, n_iter
+
 
 def gentest(num_matrices=40, shape_matrices=60):
     '''
@@ -104,6 +106,7 @@ def gentest(num_matrices=40, shape_matrices=60):
     M = np.array([B.dot(d[:, None] * B.T) for d in diagonals])
     return B, M
 
+
 if __name__ == '__main__':
     """Test approximate joint diagonalization."""
     # create k matrices of shape m x m
@@ -113,20 +116,22 @@ if __name__ == '__main__':
     basis_hat, setM_hat, n_iter = phams(setM)
     print(f'final loss: {loss(setM_hat)}')
 
-
-
     # check if basis and basis_hat are identical up to permutation and scaling
     from numpy.testing import assert_array_equal
-    BA = np.abs(basis_hat.dot(basis))  # undo negative scaling 
-    BA /= np.max(BA, axis=1, keepdims=True) # normalize to 1
-    BA[np.abs(BA) < 1e-12] = 0. # numerical tolerance
+
+    BA = np.abs(basis_hat.dot(basis))  # undo negative scaling
+    BA /= np.max(BA, axis=1, keepdims=True)  # normalize to 1
+    BA[np.abs(BA) < 1e-12] = 0.  # numerical tolerance
     print(BA)
-    import matplotlib; matplotlib.use('TkAgg')
+    import matplotlib;
+
+    matplotlib.use('TkAgg')
     import matplotlib.pyplot as plt
+
     plt.subplot(211)
     plt.imshow(basis_hat)
     plt.subplot(212)
-    import ipdb; ipdb.set_trace()
+    # import ipdb; ipdb.set_trace()
     plt.imshow(BA[np.lexsort(BA)])
     plt.show()
     assert_array_equal(BA[np.lexsort(BA)], np.eye(BA.shape[0]))

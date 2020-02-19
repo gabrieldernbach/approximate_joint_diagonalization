@@ -7,6 +7,15 @@ import numpy as np
 
 
 def transform_set(M, D):
+    """
+
+    Args:
+        M ():
+        D ():
+
+    Returns:
+
+    """
     # apply matrix M to first dim of D
     K, N, _ = D.shape
     op = np.zeros((K, N, N)) 
