@@ -20,7 +20,7 @@ def mean_rotation(C):
 
 
 def init_tournament(m):
-    '''initialize random tournament table with pairwise groups'''
+    """initialize random tournament table with pairwise groups"""
     if m % 2 == 0:
         tournament = th.randperm(m).reshape(2, m // 2)
         padflag = 0
@@ -32,7 +32,7 @@ def init_tournament(m):
 
 
 def scheduler(tournament):
-    '''return next draw of tournament table'''
+    """return next draw of tournament table"""
     old = tournament
     new = th.zeros(old.shape, dtype=th.int64)
 
@@ -47,11 +47,11 @@ def scheduler(tournament):
 
 
 def rotmat(C, tournament, padflag):
-    '''
+    """
     compute update matrix according to phams method see:
     D. T. Pham, “Joint Approximate Diagonalization of Positive Definite Hermitian Matrices,”
     SIAM Journal on Matrix Analysis and Applications, vol. 22, no. 4, pp. 1136–1152, Jan. 2001.
-    '''
+    """
     m = C.shape[1]
     k = C.shape[0]
 
@@ -102,21 +102,16 @@ def phams(Gamma, threshold=1e-50, maxiter=1000, mean_initialize=False):
 
     tournament, padflag = init_tournament(m)
 
-    # precompute B
     if mean_initialize:
         B, C = mean_rotation(C)
 
     active = 1
     n_iter = 0
-
     while active == 1 and n_iter < maxiter:
         # computation of rotations           
         T, decrease = rotmat(C, tournament, padflag)
         print(decrease)
 
-        # plt.imshow(T.numpy(),vmin=-1,vmax=1)
-        # plt.savefig(f'plot_{n_iter:00f}.jpg')
-        # update of C and B matrices
         C = T @ C @ T.T
         B = T @ B
 
@@ -128,10 +123,10 @@ def phams(Gamma, threshold=1e-50, maxiter=1000, mean_initialize=False):
 
 
 def gentest(num_matrices=40, shape_matrices=60):
-    '''
-    generate testcase for joint approximate diagonalization
+    """
+    generate test case for joint approximate diagonalization
     under assumption of non orthogonal joint basis.
-    '''
+    """
     k = num_matrices
     m = shape_matrices
     rng = th.manual_seed(42)
@@ -148,34 +143,27 @@ def gentest(num_matrices=40, shape_matrices=60):
 
 if __name__ == '__main__':
     """Test approximate joint diagonalization."""
+    import os
+
+    baseline_test_file = 'test.npz'
+    assert os.path.exists(baseline_test_file), 'please run base_implementation.py to generate a case'
+
+    test = np.load(baseline_test_file)
+    A, _, C = test['A'], test['B'], test['C']
+    A = th.tensor(A).double()
+    C = th.tensor(C).double()
+
+    B, _, _ = phams(C, threshold=1e-50, maxiter=1000, mean_initialize=False)
+
+    # check if A and B are identical up to permutation and scaling
+    A, B = A.numpy(), B.numpy()
+    BA = np.abs(B.dot(A))  # undo negative scaling
+    BA /= np.max(BA, axis=1, keepdims=True)  # normalize to 1
+    BA[np.abs(BA) < 1e-8] = 0.  # numerical tolerance
+
     import matplotlib.pyplot as plt
-
-    # matplotlib.use('TkAgg')
-    # create k matrices of shape m x m
-    basis, setM = gentest(num_matrices=40, shape_matrices=60)
-    test = np.load('test.npz')
-
-    print(f'initial loss: {loss(setM):.5f}')
-    basis_hat, setM_hat, n_iter = phams(th.from_numpy(test['setM']).type(th.float64))
-    print(f'final loss: {loss(setM_hat)}')
-
-    print(th.sum((basis_hat @ th.from_numpy(test['setM']).type(th.float64) @ basis_hat.T - setM_hat) ** 2))
-
-    print(f"expected loss: {loss(th.from_numpy(test['setM_hat']).type(th.float))}")
-    plt.subplot(211)
-    plt.imshow(basis.numpy())
-    plt.subplot(212)
-    plt.imshow(basis_hat.numpy())
+    plt.imshow(BA @ BA.T)
     plt.show()
 
-    # check if basis and basis_hat are identical up to permutation and scaling
-    import numpy as np
     from numpy.testing import assert_array_equal
-
-    basis_hat = basis_hat.numpy()
-    basis = test['basis']
-    BA = np.abs(basis_hat.dot(basis))  # undo negative scaling 
-    BA /= np.max(BA, axis=1, keepdims=True)  # normalize to 1
-    BA[np.abs(BA) < 1e-12] = 0.  # numerical tolerance
-    print(BA)
-    assert_array_equal(BA[np.lexsort(BA)], np.eye(BA.shape[0]))
+    assert_array_equal(BA[np.lexsort(BA)], np.eye(len(BA)))  # assert identity

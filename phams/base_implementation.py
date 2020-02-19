@@ -7,19 +7,10 @@ import numpy as np
 
 
 def transform_set(M, D):
-    """
-
-    Args:
-        M ():
-        D ():
-
-    Returns:
-
-    """
     # apply matrix M to first dim of D
     K, N, _ = D.shape
-    op = np.zeros((K, N, N)) 
-    for i, d in enumerate(D): # enumerate goes along 1st dimension (aka batches)
+    op = np.zeros((K, N, N))
+    for i, d in enumerate(D):  # enumerate goes along 1st dimension (aka batches)
         op[i] = M.dot(d.dot(M.T))
     return op
 
@@ -125,25 +116,23 @@ if __name__ == '__main__':
     from numpy.testing import assert_array_equal
 
     """Test approximate joint diagonalization."""
-    n, p = 40, 60 
+    n, p = 20, 40
     rng = np.random.RandomState(42)
-    
-    diagonals = rng.uniform(size=(n, p))
-    V = rng.randn(p, p)  # mixing matrix
-    M = np.array([V.dot(d[:, None] * V.T) for d in diagonals])  # dataset
-    Vhat, Mhat, _ = ajd_pham(M)
 
-    np.savez('test.npz',V=V, M=M, Vhat=Vhat, Mhat=Mhat)
+    diagonals = rng.uniform(size=(n, p))
+    A = rng.randn(p, p)  # mixing matrix
+    C = np.array([A.dot(d[:, None] * A.T) for d in diagonals])  # dataset
+    B, _, _ = ajd_pham(C)
+
+    np.savez('test.npz', A=A, B=B, C=C)
 
     # check if V and Vhat are identical up to permutation and scaling
-    VA = np.abs(Vhat.dot(V))  # undo negative scaling 
-    VA /= np.max(VA, axis=1, keepdims=True) # normalize to 1
-    VA[np.abs(VA) < 1e-12] = 0. # numerical tolerance
-    print('check', sum(VA) == len(VA))
-#    import ipdb; ipdb.set_trace()
-    import matplotlib.pyplot as plt
-    plt.imshow(VA @ VA.T)
-    plt.show()
-    
-    assert_array_equal(VA[np.lexsort(VA)], np.eye(p))
+    BA = np.abs(B.dot(A))  # undo negative scaling
+    BA /= np.max(BA, axis=1, keepdims=True)  # normalize to 1
+    BA[np.abs(BA) < 1e-8] = 0.  # numerical tolerance
 
+    import matplotlib.pyplot as plt
+    plt.imshow(BA @ BA.T)
+    plt.show()
+
+    assert_array_equal(BA[np.lexsort(BA)], np.eye(p))  # assert identity
